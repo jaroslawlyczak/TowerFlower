@@ -12,6 +12,9 @@ import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_ti
 import 'package:collection/collection.dart'; // <<<<<< tutaj!
 
 import '../models/airports_data.dart';
+import '../models/airport.dart';
+import '../models/aircraft.dart';
+import '../models/airport_flight.dart'; // Import AircraftCategory
 import '../services/firebase_service.dart';
 import 'flights_board_screen.dart';
 import 'settings_screen.dart';
@@ -38,7 +41,7 @@ class _MapLayerConfig {
   });
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final List<Marker> _aircraftMarkers = [];
   final List<Polyline> _flightPaths = [];
   String _selectedIcao = '';
@@ -88,8 +91,40 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupAudioPlayer();
     _loadUserStreams();
+    _loadAirports();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopLiveTracking();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Gdy aplikacja wraca do foreground, przeładuj lotniska
+    if (state == AppLifecycleState.resumed) {
+      _loadAirports();
+    }
+  }
+
+  Future<void> _loadAirports() async {
+    try {
+      await loadAirports();
+      if (mounted) {
+        setState(() {
+          // Odśwież ekran, aby pokazać nowe lotniska
+        });
+      }
+    } catch (e) {
+      print('Błąd ładowania lotnisk: $e');
+    }
   }
 
   Future<void> _loadUserStreams() async {
@@ -144,13 +179,6 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _stopLiveTracking();
-    _audioPlayer.dispose();
-    super.dispose();
   }
   
   void _stopLiveTracking() {
@@ -282,7 +310,9 @@ class _MapScreenState extends State<MapScreen> {
     if (_trackedIcao24 == null || 
         _lastKnownPosition == null || 
         _lastKnownHeading == null ||
-        _lastKnownVelocity == null) return;
+        _lastKnownVelocity == null) {
+      return;
+    }
     
     // Simple interpolation: move in the direction of heading
     // Convert velocity from m/s to degrees per second (rough approximation)
@@ -354,11 +384,27 @@ class _MapScreenState extends State<MapScreen> {
       
       // Aktualizuj marker jeśli znaleziono - pozycję i heading
       if (trackedIndex != null && trackedIndex != -1 && trackedIndex < _aircraftMarkers.length) {
+        // Utwórz Aircraft dla śledzonego samolotu (bez typu - unknown)
+        final trackedAircraft = Aircraft(
+          icao24: _trackedIcao24!,
+          callsign: _trackedCallsign ?? 'Tracked',
+          originCountry: 'Unknown',
+          longitude: _lastKnownPosition!.longitude,
+          latitude: _lastKnownPosition!.latitude,
+          altitude: 0.0,
+          velocity: _lastKnownVelocity ?? 0.0,
+          heading: _lastKnownHeading ?? 0.0,
+          departureIcao: '',
+          arrivalIcao: '',
+          aircraftType: null, // Nie znamy typu dla śledzonego samolotu
+        );
+        
         // Utwórz nowy marker z zaktualizowaną pozycją i headingiem
-        final newMarker = _markerWithCallsign(
+        final newMarker = _markerWithAircraft(
           position: _lastKnownPosition!,
           heading: _lastKnownHeading ?? 0.0,
           callsign: _trackedCallsign ?? 'Tracked',
+          aircraft: trackedAircraft,
           isTracked: true,
           onTap: () async {
             // Zachowaj funkcjonalność kliknięcia - pobierz trasę i pokaż dialog
@@ -444,7 +490,17 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Ustaw bounding box wokół wybranego lotniska, np. ±2 stopnie
+    final Airport? airport = _selectedAirport;
+    if (airport == null) return;
+
+    // Używamy OpenSky Network API (darmowe, open source)
+    await _fetchAircraftPositionsOpenSky();
+  }
+
+  /// Pobiera pozycje statków powietrznych z OpenSky Network API
+  Future<void> _fetchAircraftPositionsOpenSky() async {
+    if (_selectedIcao.isEmpty) return;
+    
     final Airport? airport = _selectedAirport;
     if (airport == null) return;
 
@@ -465,9 +521,7 @@ class _MapScreenState extends State<MapScreen> {
 
     final data = json.decode(response.body);
     final List<dynamic> states = data['states'] ?? [];
-
     final LatLng airportLocation = airport.location;
-
     final newMarkers = <Marker>[];
     final newFlightPaths = <Polyline>[];
 
@@ -477,9 +531,8 @@ class _MapScreenState extends State<MapScreen> {
       final icao24 = state[0];
       final callsign = (state[1] ?? 'Brak').toString().trim();
       final heading = (state[10] ?? 0.0) as double;
-      final originCountry = state[2] ?? 'Nieznany';
+      final originCountry = state[2] ?? 'Unknown';
 
-      // Use tracked position if this is the tracked aircraft
       LatLng position;
       if (_trackedIcao24 == icao24 && _lastKnownPosition != null) {
         position = _lastKnownPosition!;
@@ -489,20 +542,34 @@ class _MapScreenState extends State<MapScreen> {
       }
       
       final distanceToAirport = _distanceCalculator(position, airportLocation);
-
       if (distanceToAirport > 50000) continue;
 
       final isTracked = _trackedIcao24 == icao24;
-      final markerIndex = newMarkers.length; // Indeks tego markera w nowej liście
+      final markerIndex = newMarkers.length;
+
+      // Utwórz Aircraft bez typu statku (OpenSky nie zwraca)
+      final aircraft = Aircraft(
+        icao24: icao24,
+        callsign: callsign,
+        originCountry: originCountry,
+        longitude: lon ?? 0.0,
+        latitude: lat ?? 0.0,
+        altitude: (state[7] ?? 0.0).toDouble(),
+        velocity: (state[9] ?? 0.0).toDouble(),
+        heading: heading,
+        departureIcao: '',
+        arrivalIcao: '',
+        aircraftType: null,
+      );
 
       newMarkers.add(
-        _markerWithCallsign(
+        _markerWithAircraft(
           position: position,
           heading: isTracked && _lastKnownHeading != null ? _lastKnownHeading! : heading,
           callsign: callsign,
+          aircraft: aircraft,
           isTracked: isTracked,
           onTap: () async {
-            // Start live tracking for this aircraft
             if (_trackedIcao24 != icao24) {
               _startLiveTracking(
                 icao24: icao24,
@@ -520,53 +587,11 @@ class _MapScreenState extends State<MapScreen> {
               if (track.isNotEmpty) {
                 _flightPaths.add(Polyline(
                   points: track,
-                  color: Colors.orange,
+                  color: Colors.blue,
                   strokeWidth: 2.5,
                 ));
               }
             });
-
-            // Log flight tracking to Firebase
-            try {
-              await _firebaseService.saveFlightTracking(
-                icao24: icao24,
-                callsign: callsign,
-                airport: _selectedIcao,
-                latitude: position.latitude,
-                longitude: position.longitude,
-                heading: heading,
-              );
-            } catch (e) {
-              print('Błąd zapisywania śledzenia lotu: $e');
-            }
-
-            showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: Text('Samolot: $callsign'),
-                content: Text(
-                  'Kraj pochodzenia: $originCountry\n'
-                  'Pozycja: (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})\n'
-                  'Kierunek: ${heading.toStringAsFixed(1)}°\n'
-                  '${isTracked ? "✓ Śledzony na żywo" : ""}',
-                ),
-                actions: [
-                  if (isTracked)
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _stopLiveTracking();
-                        fetchAircraftPositions();
-                      },
-                      child: const Text('Zatrzymaj śledzenie'),
-                    ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Zamknij'),
-                  ),
-                ],
-              ),
-            );
           },
         ),
       );
@@ -579,35 +604,39 @@ class _MapScreenState extends State<MapScreen> {
       _flightPaths
         ..clear()
         ..addAll(newFlightPaths);
-      
-      // Zaktualizuj indeks markera śledzonego samolotu jeśli jest śledzony
-      if (_trackedIcao24 != null) {
-        _trackedMarkerIndex = newMarkers.indexWhere((marker) {
-          // Znajdź marker po icao24 - sprawdź czy to jest śledzony samolot
-          // Używamy pozycji jako identyfikatora (najbliższy do ostatniej znanej pozycji)
-          if (_lastKnownPosition != null) {
-            final distance = _distanceCalculator(marker.point, _lastKnownPosition!);
-            return distance < 0.05; // Tolerancja ~5km
-          }
-          return false;
-        });
-        
-        // Jeśli nie znaleziono, spróbuj znaleźć po callsign w onTap callback
-        if (_trackedMarkerIndex == -1 && _trackedCallsign != null) {
-          // Nie możemy łatwo sprawdzić callsign z markera, więc użyjemy pozycji
-          // To zostanie zaktualizowane przy następnej aktualizacji
-        }
-      }
     });
   }
 
-  Marker _markerWithCallsign({
+  /// Zwraca ikonę i rozmiar na podstawie kategorii statku powietrznego
+  (IconData icon, double size) _getAircraftIconForMap(AircraftCategory category) {
+    switch (category) {
+      case AircraftCategory.small:
+        return (Icons.airplanemode_active, 18.0);
+      case AircraftCategory.medium:
+        return (Icons.flight, 22.0);
+      case AircraftCategory.large:
+        return (Icons.local_airport, 26.0);
+      case AircraftCategory.helicopter:
+        return (Icons.toys, 20.0); // brak natywnej ikony helikoptera
+      case AircraftCategory.unknown:
+        return (Icons.flight, 20.0);
+    }
+  }
+
+  Marker _markerWithAircraft({
     required LatLng position,
     required double heading,
     required String callsign,
+    required Aircraft aircraft,
     required VoidCallback onTap,
     bool isTracked = false,
   }) {
+    final (icon, size) = _getAircraftIconForMap(aircraft.category);
+    // Debug: sprawdź kategorię i typ statku
+    if (aircraft.aircraftType != null && aircraft.aircraftType!.isNotEmpty) {
+      print('Marker: ${aircraft.callsign} - typ: ${aircraft.aircraftType}, kategoria: ${aircraft.category}');
+    }
+    
     return Marker(
       width: 100.0,
       height: 80.0,
@@ -640,9 +669,9 @@ class _MapScreenState extends State<MapScreen> {
             Transform.rotate(
               angle: heading * math.pi / 180,
               child: Icon(
-                Icons.flight, 
-                color: isTracked ? Colors.green : Colors.red, 
-                size: 30,
+                icon,
+                color: isTracked ? Colors.green : Colors.red,
+                size: size,
               ),
             ),
           ],
@@ -1011,6 +1040,11 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Wybierz lotnisko',
             icon: const Icon(Icons.local_airport),
             onSelected: (icao) async {
+              final airport = airports.firstWhereOrNull((a) => a.icao == icao);
+              if (airport != null) {
+                // Wycentruj mapę na wybranym lotnisku
+                _mapController.move(airport.location, 11);
+              }
               setState(() {
                 _selectedIcao = icao;
               });
@@ -1130,12 +1164,14 @@ class _MapScreenState extends State<MapScreen> {
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Ustawienia',
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              await Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const SettingsScreen(),
                 ),
               );
+              // Po powrocie z ustawień przeładuj lotniska (mogły zostać zmienione)
+              await _loadAirports();
             },
           ),
           IconButton(

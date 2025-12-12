@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/fligth.dart';
 import '../models/airports_data.dart';
+import '../models/airport.dart';
 
 class FlightsBoardScreen extends StatefulWidget {
   final String initialAirport;

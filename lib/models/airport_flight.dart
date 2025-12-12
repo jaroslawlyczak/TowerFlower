@@ -1,8 +1,17 @@
+enum AircraftCategory {
+  small,      // Małe samoloty (np. C172, PA28)
+  medium,     // Średnie samoloty (np. B737, A320)
+  large,       // Duże samoloty (np. B777, A380)
+  helicopter, // Helikoptery (H)
+  unknown,    // Nieznany typ
+}
+
 class AirportFlight {
   final String? flightNumber;
   final String? airline;
   final String? codesharedNumber;
   final String? aircraft;
+  final String? aircraftType; // Kod typu statku (np. "B738", "A320", "H")
   final String? destination;
   final String? origin;
   final DateTime? scheduledTime;
@@ -17,6 +26,7 @@ class AirportFlight {
     this.airline,
     this.codesharedNumber,
     this.aircraft,
+    this.aircraftType,
     this.destination,
     this.origin,
     this.scheduledTime,
@@ -26,6 +36,43 @@ class AirportFlight {
     this.gate,
     this.terminal,
   });
+
+  /// Kategoryzuje typ statku powietrznego na podstawie kodu ICAO
+  AircraftCategory get category {
+    if (aircraftType == null || aircraftType!.isEmpty) {
+      return AircraftCategory.unknown;
+    }
+    
+    final type = aircraftType!.toUpperCase();
+    
+    // Helikoptery
+    if (type.startsWith('H') || type.startsWith('Z')) {
+      return AircraftCategory.helicopter;
+    }
+    
+    // Małe samoloty (Cessna, Piper, małe regionalne)
+    if (type.startsWith('C1') || 
+        type.startsWith('C2') || 
+        type.startsWith('PA') ||
+        type.startsWith('BE') ||
+        type.startsWith('SR2') ||
+        type.startsWith('AT')) {
+      return AircraftCategory.small;
+    }
+    
+    // Duże samoloty (Boeing 777, 787, Airbus A380, A350)
+    if (type.startsWith('B77') || 
+        type.startsWith('B78') ||
+        type.startsWith('A38') ||
+        type.startsWith('A35') ||
+        type.startsWith('A33')) {
+      return AircraftCategory.large;
+    }
+    
+    // Średnie samoloty (Boeing 737, 757, Airbus A320, A321, Embraer)
+    // Wszystko inne traktujemy jako średnie
+    return AircraftCategory.medium;
+  }
 
   factory AirportFlight.fromArrivalJson(Map<String, dynamic> json) {
     DateTime? parseDateTime(dynamic value) {
@@ -89,6 +136,7 @@ class AirportFlight {
       airline: resolveAirline(),
       codesharedNumber: codesharedFlight?['iata'] ?? codesharedFlight?['icao'] ?? codesharedFlight?['number'],
       aircraft: aircraft?['iata'] ?? aircraft?['icao'] ?? aircraft?['registration'],
+      aircraftType: aircraft?['icao'] ?? aircraft?['iata'], // Kod typu statku (np. "B738", "A320")
       destination: arrival?['iata'] ?? arrival?['icao'] ?? arrival?['airport'],
       origin: departure?['iata'] ?? departure?['icao'] ?? departure?['airport'],
       scheduledTime: parseDateTime(arrival?['scheduled']),
@@ -158,6 +206,7 @@ class AirportFlight {
       airline: resolveAirline(),
       codesharedNumber: codesharedFlight?['iata'] ?? codesharedFlight?['icao'] ?? codesharedFlight?['number'],
       aircraft: aircraft?['iata'] ?? aircraft?['icao'] ?? aircraft?['registration'],
+      aircraftType: aircraft?['icao'] ?? aircraft?['iata'], // Kod typu statku (np. "B738", "A320")
       destination: arrival?['iata'] ?? arrival?['icao'] ?? arrival?['airport'],
       origin: departure?['iata'] ?? departure?['icao'] ?? departure?['airport'],
       scheduledTime: parseDateTime(departure?['scheduled']),

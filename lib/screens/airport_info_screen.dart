@@ -1,9 +1,12 @@
 // ignore_for_file: library_private_types_in_public_api, avoid_print
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/airport_flight.dart';
 import '../services/airport_info_service.dart';
+import '../services/firebase_service.dart';
 import '../models/airports_data.dart';
+import '../models/airport.dart';
 import 'aircraft_photos_screen.dart';
 
 class AirportInfoScreen extends StatefulWidget {
@@ -18,7 +21,8 @@ class AirportInfoScreen extends StatefulWidget {
 class _AirportInfoScreenState extends State<AirportInfoScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final AirportInfoService _airportInfoService = AirportInfoService();
+  late AirportInfoService _airportInfoService;
+  final FirebaseService _firebaseService = FirebaseService();
   
   Future<List<AirportFlight>>? _arrivalsFuture;
   Future<List<AirportFlight>>? _departuresFuture;
@@ -30,7 +34,49 @@ class _AirportInfoScreenState extends State<AirportInfoScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadData();
+    _initializeService();
+  }
+
+  Future<void> _initializeService() async {
+    try {
+      final apiKey = await _getApiKey();
+      _airportInfoService = AirportInfoService(apiKey: apiKey.isEmpty ? null : apiKey);
+      if (mounted) {
+        _loadData();
+      }
+    } catch (e) {
+      debugPrint('Błąd inicjalizacji serwisu: $e');
+      _airportInfoService = AirportInfoService();
+      if (mounted) {
+        _loadData();
+      }
+    }
+  }
+
+  Future<String> _getApiKey() async {
+    try {
+      // Najpierw spróbuj wczytać z Firebase (jeśli użytkownik jest zalogowany)
+      if (_firebaseService.currentUser != null) {
+        final firebaseKey = await _firebaseService.getApiKeyFromFirebase();
+        if (firebaseKey != null && firebaseKey.isNotEmpty) {
+          return firebaseKey;
+        }
+      }
+      
+      // Fallback do lokalnego klucza
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('aviationstack_api_key') ?? '';
+    } catch (e) {
+      debugPrint('Błąd wczytywania klucza API: $e');
+      // Fallback do lokalnego klucza
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        return prefs.getString('aviationstack_api_key') ?? '';
+      } catch (e2) {
+        debugPrint('Błąd wczytywania lokalnego klucza API: $e2');
+        return '';
+      }
+    }
   }
 
   @override
@@ -45,6 +91,12 @@ class _AirportInfoScreenState extends State<AirportInfoScreen>
     });
 
     try {
+      // Odśwież klucz API przed każdym ładowaniem danych
+      final apiKey = await _getApiKey();
+      if (apiKey.isNotEmpty) {
+        _airportInfoService.setApiKey(apiKey);
+      }
+
       setState(() {
         // Używamy Aviationstack API z domyślnym kluczem i filtrowaniem czasowym
         _arrivalsFuture = _airportInfoService.fetchArrivals(widget.airportIcao, hoursRange: _hoursRange);
@@ -170,6 +222,37 @@ class _AirportInfoScreenState extends State<AirportInfoScreen>
     return 'grey';
   }
 
+  /// Zwraca ikonę i rozmiar na podstawie kategorii statku powietrznego
+  (IconData icon, double size) _getAircraftIcon(AircraftCategory category, bool isArrival) {
+    switch (category) {
+      case AircraftCategory.small:
+        return (
+          isArrival ? Icons.flight_land : Icons.flight_takeoff,
+          20.0
+        );
+      case AircraftCategory.medium:
+        return (
+          isArrival ? Icons.flight_land : Icons.flight_takeoff,
+          24.0
+        );
+      case AircraftCategory.large:
+        return (
+          isArrival ? Icons.flight_land : Icons.flight_takeoff,
+          28.0
+        );
+      case AircraftCategory.helicopter:
+        return (
+          Icons.flight, // Ikona dla helikopterów
+          22.0
+        );
+      case AircraftCategory.unknown:
+        return (
+          isArrival ? Icons.flight_land : Icons.flight_takeoff,
+          22.0
+        );
+    }
+  }
+
   Widget _buildFlightList(List<AirportFlight> flights, bool isArrival) {
     if (flights.isEmpty) {
       return Center(
@@ -216,10 +299,14 @@ class _AirportInfoScreenState extends State<AirportInfoScreen>
               leading: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    isArrival ? Icons.flight_land : Icons.flight_takeoff,
-                    color: _getStatusColorIcon(statusColor),
-                  ),
+                  Builder(builder: (_) {
+                    final (icon, size) = _getAircraftIcon(flight.category, isArrival);
+                    return Icon(
+                      icon,
+                      color: _getStatusColorIcon(statusColor),
+                      size: size,
+                    );
+                  }),
                   const SizedBox(height: 4),
                   Builder(builder: (_) {
                     final (label, time) = _displayTime(flight, isArrival);

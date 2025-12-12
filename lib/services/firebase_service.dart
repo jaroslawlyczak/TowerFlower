@@ -145,6 +145,53 @@ class FirebaseService {
     }
   }
 
+  // API Key management
+  Future<void> saveApiKeyToFirebase(String apiKey) async {
+    if (currentUser == null) {
+      throw Exception('Musisz być zalogowany, aby zapisać klucz API w Firebase');
+    }
+
+    try {
+      await _firestore
+          .collection('users')
+          .doc(currentUser!.uid)
+          .set({
+        'aviationstackApiKey': apiKey,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await _analytics.logEvent(
+        name: 'api_key_saved_firebase',
+      );
+    } catch (e) {
+      await _analytics.logEvent(
+        name: 'firestore_error',
+        parameters: {'error': e.toString()},
+      );
+      rethrow;
+    }
+  }
+
+  Future<String?> getApiKeyFromFirebase() async {
+    if (currentUser == null) return null;
+
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(currentUser!.uid)
+          .get();
+
+      final data = doc.data();
+      return data?['aviationstackApiKey'] as String?;
+    } catch (e) {
+      await _analytics.logEvent(
+        name: 'firestore_error',
+        parameters: {'error': e.toString()},
+      );
+      return null;
+    }
+  }
+
   // Flight tracking data
   Future<void> saveFlightTracking({
     required String icao24,
@@ -493,6 +540,36 @@ class FirebaseService {
     return _firestore
         .collection('aircraft_photos')
         .where('airportIcao', isEqualTo: airportIcao)
+        .orderBy('uploadedAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return AircraftPhoto(
+          id: doc.id,
+          airportIcao: data['airportIcao'] ?? '',
+          imageUrl: data['imageUrl'] ?? '',
+          aircraftRegistration: data['aircraftRegistration'],
+          flightNumber: data['flightNumber'],
+          description: data['description'],
+          uploadedBy: data['uploadedBy'],
+          uploadedByEmail: data['uploadedByEmail'],
+          uploadedAt: (data['uploadedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          likes: data['likes'] ?? 0,
+        );
+      }).toList();
+    });
+  }
+
+  /// Pobiera wszystkie zdjęcia dodane przez aktualnie zalogowanego użytkownika
+  Stream<List<AircraftPhoto>> getMyAircraftPhotos() {
+    if (currentUser == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('aircraft_photos')
+        .where('uploadedBy', isEqualTo: currentUser!.uid)
         .orderBy('uploadedAt', descending: true)
         .snapshots()
         .map((snapshot) {

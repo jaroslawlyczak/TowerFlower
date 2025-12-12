@@ -1,20 +1,9 @@
 import 'package:latlong2/latlong.dart';
+import '../services/firebase_service.dart';
+import 'airport.dart';
 
-class Airport {
-  final String icao;
-  final String name;
-  final LatLng location;
-  final String? liveStreamUrl;
-
-  const Airport({
-    required this.icao,
-    required this.name,
-    required this.location,
-    this.liveStreamUrl,
-  });
-}
-
-const List<Airport> airports = [
+/// Domyślna lista lotnisk (fallback)
+const List<Airport> defaultAirports = [
   Airport(
     icao: 'EPKK',
     name: 'Kraków-Balice',
@@ -94,4 +83,31 @@ const List<Airport> airports = [
     liveStreamUrl: null,
   ),
 ];
+
+/// Lista lotnisk używana w aplikacji (może być nadpisana przez Firebase)
+List<Airport> airports = defaultAirports;
+
+/// Ładuje lotniska z Firebase lub używa domyślnej listy
+Future<List<Airport>> loadAirports() async {
+  try {
+    final firebaseService = FirebaseService();
+    final firebaseAirports = await firebaseService.getAirports();
+    
+    if (firebaseAirports.isNotEmpty) {
+      // Połącz lotniska z Firebase z domyślnymi (bez duplikatów)
+      final icaoCodes = firebaseAirports.map((a) => a.icao).toSet();
+      final additionalDefaults = defaultAirports.where((a) => !icaoCodes.contains(a.icao)).toList();
+      
+      airports = [...firebaseAirports, ...additionalDefaults];
+      return airports;
+    } else {
+      airports = defaultAirports;
+      return airports;
+    }
+  } catch (e) {
+    // W przypadku błędu użyj domyślnej listy
+    airports = defaultAirports;
+    return airports;
+  }
+}
 

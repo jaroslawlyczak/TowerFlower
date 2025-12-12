@@ -1,0 +1,34 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "aircraft_photos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "airportIcao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "uploadedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aircraft_photos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uploadedBy",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "uploadedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+

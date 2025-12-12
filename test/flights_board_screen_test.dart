@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import '../lib/screens/flights_board_screen.dart';
-import '../lib/models/fligth.dart';
+import 'package:flutter_application/screens/flights_board_screen.dart';
 
 void main() {
   group('FlightsBoardScreen Navigation Tests', () {

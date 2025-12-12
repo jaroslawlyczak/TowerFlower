@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../models/airports_data.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -30,11 +31,23 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _controller.forward();
 
+    // Załaduj lotniska podczas inicjalizacji
+    _loadAirports();
+
     Timer(Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/auth');
       }
     });
+  }
+
+  Future<void> _loadAirports() async {
+    try {
+      await loadAirports();
+    } catch (e) {
+      // Ignoruj błędy - użyj domyślnej listy
+      debugPrint('Błąd ładowania lotnisk: $e');
+    }
   }
 
   @override

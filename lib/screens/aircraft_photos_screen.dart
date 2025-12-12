@@ -258,15 +258,28 @@ class _AircraftPhotosScreenState extends State<AircraftPhotosScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Zdjęcia samolotów'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Odśwież',
+            onPressed: () {
+              setState(() {
+                // Wymuś odświeżenie streamu
+              });
+            },
+          ),
+        ],
       ),
       body: StreamBuilder<List<AircraftPhoto>>(
         stream: _firebaseService.getAircraftPhotos(widget.airportIcao),
         builder: (context, snapshot) {
+          // Debug - wyświetl informacje o stanie
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
+            debugPrint('Błąd w StreamBuilder zdjęć: ${snapshot.error}');
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -274,12 +287,26 @@ class _AircraftPhotosScreenState extends State<AircraftPhotosScreen> {
                   const Icon(Icons.error_outline, size: 64, color: Colors.red),
                   const SizedBox(height: 16),
                   Text('Błąd: ${snapshot.error}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Spróbuj ponownie'),
+                    onPressed: () {
+                      setState(() {});
+                    },
+                  ),
                 ],
               ),
             );
           }
 
           final photos = snapshot.data ?? [];
+          debugPrint('Załadowano ${photos.length} zdjęć dla lotniska ${widget.airportIcao}');
+          
+          // Debug - wyświetl szczegóły każdego zdjęcia
+          for (var photo in photos) {
+            debugPrint('Zdjęcie: ${photo.id}, URL: ${photo.imageUrl}, airport: ${photo.airportIcao}');
+          }
 
           if (photos.isEmpty) {
             return Center(

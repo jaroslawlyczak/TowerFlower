@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/models/fligth.dart';
+import 'package:flutter_application/models/fligth.dart';
 
 void main() {
   group('Flight Model Tests', () {

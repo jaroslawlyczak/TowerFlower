@@ -81,4 +81,4 @@ Ten projekt jest przeznaczony do pracy inżynierskiej.
 
 ## Autor
 
-Twój projekt inżynierski - TowerFlower
+Jarosłąw Łyczak
