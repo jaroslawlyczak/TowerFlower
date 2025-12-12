@@ -69,6 +69,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               Image.asset(
                 'assets/logo.png', 
                 height: 120,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(Icons.error, size: 120);
+                },
               ),
               SizedBox(height: 20),
               Text(

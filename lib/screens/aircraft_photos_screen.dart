@@ -301,12 +301,6 @@ class _AircraftPhotosScreenState extends State<AircraftPhotosScreen> {
           }
 
           final photos = snapshot.data ?? [];
-          debugPrint('Załadowano ${photos.length} zdjęć dla lotniska ${widget.airportIcao}');
-          
-          // Debug - wyświetl szczegóły każdego zdjęcia
-          for (var photo in photos) {
-            debugPrint('Zdjęcie: ${photo.id}, URL: ${photo.imageUrl}, airport: ${photo.airportIcao}');
-          }
 
           if (photos.isEmpty) {
             return Center(

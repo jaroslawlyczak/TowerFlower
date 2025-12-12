@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/airport_flight.dart';
 
@@ -57,19 +56,9 @@ class AirportInfoService {
         // Surowe próbki czasów z API (przed parsowaniem)
         final allFlights = flights.map((json) => AirportFlight.fromArrivalJson(json as Map<String, dynamic>)).toList();
         
-        debugPrint('=== PRZYLOTY DEBUG ===');
-        debugPrint('Liczba lotów z API: ${allFlights.length}');
-        
         // Jeśli brak lotów, zwróć pustą listę
         if (allFlights.isEmpty) {
-          debugPrint('Brak lotów do przefiltrowania');
           return [];
-        }
-        
-        // Debugowanie pierwszych kilku lotów
-        for (int i = 0; i < allFlights.length && i < 3; i++) {
-          final flight = allFlights[i];
-          debugPrint('Lot $i: ${flight.flightNumber}, scheduled=${flight.scheduledTime}, estimated=${flight.estimatedTime}, actual=${flight.actualTime}');
         }
         
         // Filtruj loty według lokalnego czasu urządzenia: od -30 min do +X godzin
@@ -77,26 +66,6 @@ class AirportInfoService {
         // Umiarkowany bufor: -30 min wstecz, +X h + 60 min do przodu
         final startTimeLocal = nowLocal.subtract(const Duration(minutes: 30));
         final endTimeLocal = nowLocal.add(Duration(hours: hoursRange, minutes: 60));
-        debugPrint('Filtrowanie przylotów (local): start=$startTimeLocal, end=$endTimeLocal, now=$nowLocal, hoursRange=$hoursRange');
-        
-        int nullTimeCount = 0;
-        int outOfRangeCount = 0;
-        int inRangeCount = 0;
-        
-        // Debugowanie - sprawdź pierwsze 5 lotów szczegółowo
-        for (int i = 0; i < allFlights.length && i < 5; i++) {
-          final flight = allFlights[i];
-          final scheduledTime = flight.scheduledTime ?? flight.estimatedTime ?? flight.actualTime;
-          if (scheduledTime != null) {
-            final flightTimeLocal = scheduledTime;
-            final isInRange = (flightTimeLocal.isAfter(startTimeLocal) || flightTimeLocal.isAtSameMomentAs(startTimeLocal)) && 
-                             (flightTimeLocal.isBefore(endTimeLocal) || flightTimeLocal.isAtSameMomentAs(endTimeLocal));
-            final diff = flightTimeLocal.difference(nowLocal);
-            debugPrint('Lot ${flight.flightNumber}: timeLocal=$flightTimeLocal, inRange=$isInRange, diffLocal=${diff.inMinutes}min');
-          } else {
-            debugPrint('Lot ${flight.flightNumber}: BRAK CZASU');
-          }
-        }
         
         final filtered = allFlights.where((flight) {
           // Użyj actualTime jeśli dostępne, w przeciwnym razie scheduled lub estimated
@@ -107,7 +76,6 @@ class AirportInfoService {
           } else {
             final scheduledTime = flight.scheduledTime ?? flight.estimatedTime;
             if (scheduledTime == null) {
-              nullTimeCount++;
               return false;
             }
             flightTimeLocal = scheduledTime;
@@ -117,18 +85,8 @@ class AirportInfoService {
           final inRange = (flightTimeLocal.isAfter(startTimeLocal) || flightTimeLocal.isAtSameMomentAs(startTimeLocal)) && 
                          (flightTimeLocal.isBefore(endTimeLocal) || flightTimeLocal.isAtSameMomentAs(endTimeLocal));
           
-          if (inRange) {
-            inRangeCount++;
-          } else {
-            outOfRangeCount++;
-          }
-          
           return inRange;
         }).toList();
-        
-        
-        debugPrint('Przefiltrowane przyloty: ${filtered.length} z ${allFlights.length}');
-        debugPrint('Statystyki: bez czasu=$nullTimeCount, w zakresie=$inRangeCount, poza zakresem=$outOfRangeCount');
         
         
         // Zwróć przefiltrowane loty
@@ -181,19 +139,9 @@ class AirportInfoService {
         final List<dynamic> flights = data['data'] ?? [];
         final allFlights = flights.map((json) => AirportFlight.fromDepartureJson(json as Map<String, dynamic>)).toList();
         
-        debugPrint('=== ODLOTY DEBUG ===');
-        debugPrint('Liczba lotów z API: ${allFlights.length}');
-        
         // Jeśli brak lotów, zwróć pustą listę
         if (allFlights.isEmpty) {
-          debugPrint('Brak lotów do przefiltrowania');
           return [];
-        }
-        
-        // Debugowanie pierwszych kilku lotów
-        for (int i = 0; i < allFlights.length && i < 3; i++) {
-          final flight = allFlights[i];
-          debugPrint('Lot $i: ${flight.flightNumber}, scheduled=${flight.scheduledTime}, estimated=${flight.estimatedTime}, actual=${flight.actualTime}');
         }
         
         // Filtruj loty według lokalnego czasu urządzenia (od -30 min do +X godzin)
@@ -201,41 +149,6 @@ class AirportInfoService {
         // Umiarkowany bufor: -30 min wstecz, +X h + 60 min do przodu
         final startTimeLocal = nowLocal.subtract(const Duration(minutes: 30)); // 30 minut wstecz
         final endTimeLocal = nowLocal.add(Duration(hours: hoursRange, minutes: 60)); // X godzin + 60 min
-        _agentLog(
-          location: 'airport_info_service.dart:fetchDepartures',
-          message: 'Departures time window (local-based)',
-          data: {
-            'startLocal': startTimeLocal.toIso8601String(),
-            'endLocal': endTimeLocal.toIso8601String(),
-            'nowLocal': nowLocal.toIso8601String(),
-            'hoursRange': hoursRange,
-            'bufferMinutesBack': 30,
-            'bufferMinutesForward': 60,
-          },
-          hypothesisId: 'H2',
-          runId: 'post-fix',
-        );
-        
-        debugPrint('Filtrowanie odlotów (local): start=$startTimeLocal, end=$endTimeLocal, now=$nowLocal, hoursRange=$hoursRange');
-        
-        int nullTimeCount = 0;
-        int outOfRangeCount = 0;
-        int inRangeCount = 0;
-        
-        // Debugowanie - sprawdź pierwsze 5 lotów szczegółowo
-        for (int i = 0; i < allFlights.length && i < 5; i++) {
-          final flight = allFlights[i];
-          final scheduledTime = flight.scheduledTime ?? flight.estimatedTime ?? flight.actualTime;
-          if (scheduledTime != null) {
-            final flightTimeLocal = scheduledTime;
-            final isInRange = (flightTimeLocal.isAfter(startTimeLocal) || flightTimeLocal.isAtSameMomentAs(startTimeLocal)) && 
-                             (flightTimeLocal.isBefore(endTimeLocal) || flightTimeLocal.isAtSameMomentAs(endTimeLocal));
-            final diff = flightTimeLocal.difference(nowLocal);
-            debugPrint('Lot ${flight.flightNumber}: timeLocal=$flightTimeLocal, inRange=$isInRange, diffLocal=${diff.inMinutes}min');
-          } else {
-            debugPrint('Lot ${flight.flightNumber}: BRAK CZASU');
-          }
-        }
         
         final filtered = allFlights.where((flight) {
           // Użyj actualTime jeśli dostępne, w przeciwnym razie scheduled lub estimated
@@ -246,7 +159,6 @@ class AirportInfoService {
           } else {
             final scheduledTime = flight.scheduledTime ?? flight.estimatedTime;
             if (scheduledTime == null) {
-              nullTimeCount++;
               return false;
             }
             flightTimeLocal = scheduledTime;
@@ -255,12 +167,6 @@ class AirportInfoService {
           // Sprawdź czy lot jest w zakresie czasowym (lokalnie od -30 min do +X godzin)
           final inRange = (flightTimeLocal.isAfter(startTimeLocal) || flightTimeLocal.isAtSameMomentAs(startTimeLocal)) && 
                          (flightTimeLocal.isBefore(endTimeLocal) || flightTimeLocal.isAtSameMomentAs(endTimeLocal));
-          
-          if (inRange) {
-            inRangeCount++;
-          } else {
-            outOfRangeCount++;
-          }
           
           return inRange;
         }).toList();
@@ -285,17 +191,12 @@ class AirportInfoService {
           );
         }
         
-        debugPrint('Przefiltrowane odloty: ${filtered.length} z ${allFlights.length}');
-        debugPrint('Statystyki: bez czasu=$nullTimeCount, w zakresie=$inRangeCount, poza zakresem=$outOfRangeCount');
         _agentLog(
           location: 'airport_info_service.dart:fetchDepartures',
           message: 'Departures filter stats',
           data: {
             'filtered': filtered.length,
             'total': allFlights.length,
-            'nullTime': nullTimeCount,
-            'inRange': inRangeCount,
-            'outOfRange': outOfRangeCount,
           },
           hypothesisId: 'H1',
           runId: 'post-fix',

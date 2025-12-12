@@ -16,24 +16,52 @@ import 'screens/streams_management_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
-  // Initialize Firebase Crashlytics (tylko dla platform natywnych, nie web)
-  if (!kIsWeb) {
-    FlutterError.onError = (errorDetails) {
-      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-    };
+  // Initialize Firebase with error handling
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     
-    // Pass all uncaught asynchronous errors to Crashlytics
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      return true;
-    };
-  } else {
-    // Na web tylko loguj błędy do konsoli
+    // Initialize Firebase Crashlytics (tylko dla platform natywnych, nie web)
+    if (!kIsWeb) {
+      try {
+        FlutterError.onError = (errorDetails) {
+          FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+        };
+        
+        // Pass all uncaught asynchronous errors to Crashlytics
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          return true;
+        };
+      } catch (e) {
+        debugPrint('Błąd inicjalizacji Crashlytics: $e');
+        // Fallback error handling
+        FlutterError.onError = (errorDetails) {
+          FlutterError.presentError(errorDetails);
+        };
+        
+        PlatformDispatcher.instance.onError = (error, stack) {
+          debugPrint('Uncaught error: $error\nStack: $stack');
+          return true;
+        };
+      }
+    } else {
+      // Na web tylko loguj błędy do konsoli
+      FlutterError.onError = (errorDetails) {
+        FlutterError.presentError(errorDetails);
+      };
+      
+      PlatformDispatcher.instance.onError = (error, stack) {
+        debugPrint('Uncaught error: $error\nStack: $stack');
+        return true;
+      };
+    }
+  } catch (e, stackTrace) {
+    debugPrint('Błąd inicjalizacji Firebase: $e');
+    debugPrint('Stack trace: $stackTrace');
+    // Kontynuuj uruchomienie aplikacji nawet jeśli Firebase się nie zainicjalizował
+    // Aplikacja może działać w trybie offline
     FlutterError.onError = (errorDetails) {
       FlutterError.presentError(errorDetails);
     };
@@ -54,6 +82,7 @@ class TowerFlowerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TowerFlower',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -63,7 +92,9 @@ class TowerFlowerApp extends StatelessWidget {
       ],
       initialRoute: '/',
       routes: {
-        '/': (context) => SplashScreen(),
+        '/': (context) {
+          return SplashScreen();
+        },
         '/auth': (context) => AuthScreen(),
         '/map': (context) => MapScreen(),
         '/settings': (context) => SettingsScreen(),

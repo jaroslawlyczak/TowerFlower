@@ -140,7 +140,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _setupAudioPlayer() {
     _audioPlayer.playerStateStream.listen((state) {
-      print('AudioPlayer state changed: playing=${state.playing}, processingState=${state.processingState}, listeningIcao=$_listeningIcao');
       setState(() {
         _isPlaying = state.playing;
         // Resetuj stan tylko jeśli stream został zatrzymany i nie ma ustawionego listeningIcao
@@ -479,14 +478,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final List<dynamic> track = data['path'] ?? [];
       return track.map<LatLng>((coord) => LatLng(coord[1], coord[2])).toList();
     } else {
-      print('Nie udało się pobrać śladu lotu dla $icao24');
       return [];
     }
   }
 
   Future<void> fetchAircraftPositions() async {
     if (_selectedIcao.isEmpty) {
-      print('Nie wybrano lotniska — nie pobieram danych.');
       return;
     }
 
@@ -632,10 +629,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     bool isTracked = false,
   }) {
     final (icon, size) = _getAircraftIconForMap(aircraft.category);
-    // Debug: sprawdź kategorię i typ statku
-    if (aircraft.aircraftType != null && aircraft.aircraftType!.isNotEmpty) {
-      print('Marker: ${aircraft.callsign} - typ: ${aircraft.aircraftType}, kategoria: ${aircraft.category}');
-    }
     
     return Marker(
       width: 100.0,
@@ -681,19 +674,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _playLiveStreamForAirport(String icao) async {
-    print('_playLiveStreamForAirport called with icao: $icao');
-    print('Current state: listeningIcao=$_listeningIcao, isPlaying=$_isPlaying');
-    
     // Jeśli już odtwarzamy ten stream, zatrzymaj go
     if (_listeningIcao == icao && _isPlaying) {
-      print('Stopping current stream (same airport)');
       await _audioPlayer.stop();
       return;
     }
 
     // Jeśli odtwarzamy inny stream, zatrzymaj go najpierw
     if (_isPlaying && _listeningIcao != icao) {
-      print('Stopping current stream (different airport)');
       await _audioPlayer.stop();
     }
 
@@ -706,7 +694,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     if (streams.isEmpty) {
-      print('Brak streamu dla lotniska $icao');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -779,7 +766,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _playStream(String streamUrl, String streamName, String icao) async {
-    print('Playing stream: $streamUrl, name: $streamName');
     try {
       // Ustaw stan przed inicjalizacją, aby uniknąć błędnych powiadomień
       // Nie resetuj stanu jeśli już jest ustawiony (podczas zmiany streamu)
@@ -790,7 +776,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _currentStreamUrl = streamUrl;
         _isPlaying = true; // Ustaw od razu, listener zaktualizuje jeśli trzeba
       });
-      print('Set _currentStreamName to: $_currentStreamName, listeningIcao: $_listeningIcao, isPlaying: $_isPlaying');
 
       // Zatrzymaj poprzedni stream przed załadowaniem nowego
       try {
@@ -806,8 +791,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await Future.delayed(const Duration(milliseconds: 100));
       
       await _audioPlayer.play();
-      print('AudioPlayer.play() called, setting state...');
-      print('Stream started: icao=$icao, name=$_currentStreamName, listeningIcao=$_listeningIcao');
     } catch (e) {
       print('Błąd odtwarzania streamu: $e');
       // Resetuj stan tylko jeśli to prawdziwy błąd
@@ -830,14 +813,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stopStream() async {
-    print('Stopping stream: listeningIcao=$_listeningIcao');
     await _audioPlayer.stop();
       setState(() {
         _listeningIcao = null;
         _currentStreamName = null;
         _currentStreamUrl = null;
       });
-    print('Stream stopped: listeningIcao=$_listeningIcao');
   }
 
   Future<void> _changeStream() async {
@@ -920,7 +901,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           _currentStreamUrl = streamUrl;
           _isPlaying = true;
         });
-        print('Changing stream - set _currentStreamName to: $_currentStreamName, listeningIcao: $_listeningIcao');
         await _playStream(streamUrl, streamName ?? 'Stream $_listeningIcao', _listeningIcao!);
       }
     }
@@ -1009,8 +989,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final bool isListening = _listeningIcao != null; // Uproszczony warunek
     final bool hasStreamForSelected = _selectedIcao.isNotEmpty &&
         _userStreams.any((s) => s['airportIcao'] == _selectedIcao);
-    
-    print('Build: listeningIcao=$_listeningIcao, isListening=$isListening, isPlaying=$_isPlaying');
 
     return Scaffold(
       appBar: AppBar(
@@ -1029,13 +1007,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           ],
         ),
         actions: [
-          // Stop stream button
-          if (_listeningIcao != null)
-            IconButton(
-              icon: const Icon(Icons.stop),
-              tooltip: 'Zatrzymaj stream',
-              onPressed: _stopStream,
-            ),
+          // Menu wyboru lotniska
           PopupMenuButton<String>(
             tooltip: 'Wybierz lotnisko',
             icon: const Icon(Icons.local_airport),
@@ -1071,12 +1043,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               }).toList();
             },
           ),
+          // Przycisk odświeżania - najczęściej używany
           IconButton(
-            tooltip: 'Loty',
-            icon: const Icon(Icons.flight_takeoff),
-            onPressed: noAirportSelected
-                ? null
-                : () async {
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Odśwież pozycje samolotów',
+            onPressed: noAirportSelected ? null : fetchAircraftPositions,
+          ),
+          // Menu z pozostałymi opcjami
+          PopupMenuButton<String>(
+            tooltip: 'Więcej opcji',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) async {
+              switch (value) {
+                case 'flights':
+                  if (!noAirportSelected) {
                     final result = await Navigator.of(context).push<Map<String, dynamic>>(
                       MaterialPageRoute(
                         builder: (context) =>
@@ -1085,7 +1065,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     );
                     
                     if (result != null && mounted) {
-                      // Center map on selected flight
                       final lat = result['latitude'] as double;
                       final lon = result['longitude'] as double;
                       final icao24 = result['icao24'] as String;
@@ -1093,183 +1072,223 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       
                       _mapController.move(LatLng(lat, lon), 12.0);
                       
-                      // Start live tracking for this aircraft
                       final callsign = result['callsign'] as String?;
-                      
-                      // Ustaw podstawowe dane śledzenia przed pobraniem markerów
                       _trackedIcao24 = icao24;
                       _trackedCallsign = callsign;
                       _lastKnownPosition = LatLng(lat, lon);
                       _lastKnownHeading = heading;
                       
-                      // Refresh aircraft positions first to get markers and find the tracked one
                       await fetchAircraftPositions();
-                      
-                      // Then start full tracking with timers (markerIndex should be set now)
                       _startLiveTracking(
                         icao24: icao24,
                         initialLat: lat,
                         initialLon: lon,
                         initialHeading: heading,
                         callsign: callsign,
-                        markerIndex: _trackedMarkerIndex, // Powinien być ustawiony przez fetchAircraftPositions
+                        markerIndex: _trackedMarkerIndex,
                       );
                     }
-                  },
-          ),
-          IconButton(
-            tooltip: 'Informacje lotniskowe',
-            icon: const Icon(Icons.info_outline),
-            onPressed: noAirportSelected
-                ? null
-                : () {
+                  }
+                  break;
+                case 'airport_info':
+                  if (!noAirportSelected) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) =>
                             AirportInfoScreen(airportIcao: _selectedIcao),
                       ),
                     );
-                  },
-          ),
-          IconButton(
-            tooltip: 'Zdjęcia samolotów',
-            icon: const Icon(Icons.photo_camera),
-            onPressed: noAirportSelected
-                ? null
-                : () {
+                  }
+                  break;
+                case 'photos':
+                  if (!noAirportSelected) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) =>
                             AircraftPhotosScreen(airportIcao: _selectedIcao),
                       ),
                     );
-                  },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Odśwież pozycje samolotów',
-            onPressed: noAirportSelected ? null : fetchAircraftPositions,
-          ),
-          IconButton(
-            icon: const Icon(Icons.radio),
-            tooltip: 'Moje streamy',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const StreamsManagementScreen(),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Ustawienia',
-            onPressed: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
-                ),
-              );
-              // Po powrocie z ustawień przeładuj lotniska (mogły zostać zmienione)
-              await _loadAirports();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.info),
-            tooltip: 'Informacje',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('Informacje'),
-                  content:
-                      const Text('Aplikacja TowerFlower - centrum informacji lotniskowej.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Zamknij'),
+                  }
+                  break;
+                case 'streams':
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const StreamsManagementScreen(),
                     ),
+                  );
+                  break;
+                case 'settings':
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsScreen(),
+                    ),
+                  );
+                  await _loadAirports();
+                  break;
+                case 'info':
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Informacje'),
+                      content: const Text('Aplikacja TowerFlower - centrum informacji lotniskowej.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Zamknij'),
+                        ),
+                      ],
+                    ),
+                  );
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'flights',
+                enabled: !noAirportSelected,
+                child: const Row(
+                  children: [
+                    Icon(Icons.flight_takeoff, size: 20),
+                    SizedBox(width: 12),
+                    Text('Loty'),
                   ],
                 ),
-              );
-            },
+              ),
+              PopupMenuItem(
+                value: 'airport_info',
+                enabled: !noAirportSelected,
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20),
+                    SizedBox(width: 12),
+                    Text('Informacje lotniskowe'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'photos',
+                enabled: !noAirportSelected,
+                child: const Row(
+                  children: [
+                    Icon(Icons.photo_camera, size: 20),
+                    SizedBox(width: 12),
+                    Text('Zdjęcia samolotów'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'streams',
+                child: Row(
+                  children: [
+                    Icon(Icons.radio, size: 20),
+                    SizedBox(width: 12),
+                    Text('Moje streamy'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings, size: 20),
+                    SizedBox(width: 12),
+                    Text('Ustawienia'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'info',
+                child: Row(
+                  children: [
+                    Icon(Icons.info, size: 20),
+                    SizedBox(width: 12),
+                    Text('Informacje'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      body: FlutterMap(
-        mapController: _mapController,
-        options: MapOptions(
-          initialCenter: LatLng(52.2297, 21.0122),
-          initialZoom: 6.5,
-        ),
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: _mapLayers[_currentLayerIndex].urlTemplate,
-            subdomains: _mapLayers[_currentLayerIndex].subdomains,
-            userAgentPackageName: 'com.example.towerflower',
-            tileProvider: CancellableNetworkTileProvider(),
-          ),
-          MarkerLayer(
-            markers: airports.map((airport) {
-              final isActive = airport.icao == _listeningIcao;
-              final hasStream = _userStreams.any((s) => s['airportIcao'] == airport.icao);
-              return Marker(
-                point: airport.location,
-                width: 50,
-                height: 50,
-                child: GestureDetector(
-                  onTap: () async {
-                    setState(() {
-                      _selectedIcao = airport.icao;
-                    });
-                    await fetchAircraftPositions();
-                    await _playLiveStreamForAirport(airport.icao);
-                  },
-                  child: Column(
-                    children: [
-                      Stack(
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: LatLng(52.2297, 21.0122),
+              initialZoom: 6.5,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: _mapLayers[_currentLayerIndex].urlTemplate,
+                subdomains: _mapLayers[_currentLayerIndex].subdomains,
+                userAgentPackageName: 'com.example.towerflower',
+                tileProvider: CancellableNetworkTileProvider(),
+              ),
+              MarkerLayer(
+                markers: airports.map((airport) {
+                  final isActive = airport.icao == _listeningIcao;
+                  final hasStream = _userStreams.any((s) => s['airportIcao'] == airport.icao);
+                  return Marker(
+                    point: airport.location,
+                    width: 50,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        setState(() {
+                          _selectedIcao = airport.icao;
+                        });
+                        await fetchAircraftPositions();
+                        await _playLiveStreamForAirport(airport.icao);
+                      },
+                      child: Column(
                         children: [
-                          Icon(
-                            Icons.location_on,
-                            color: isActive ? Colors.green : Colors.blue,
-                            size: 30,
-                          ),
-                          if (hasStream)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 1),
-                                ),
-                                child: const Icon(
-                                  Icons.radio,
-                                  size: 8,
-                                  color: Colors.white,
-                                ),
+                          Stack(
+                            children: [
+                              Icon(
+                                Icons.location_on,
+                                color: isActive ? Colors.green : Colors.blue,
+                                size: 30,
                               ),
+                              if (hasStream)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 1),
+                                    ),
+                                    child: const Icon(
+                                      Icons.radio,
+                                      size: 8,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          Text(
+                            airport.icao,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isActive ? Colors.green : Colors.blue,
                             ),
+                          ),
                         ],
                       ),
-                      Text(
-                        airport.icao,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isActive ? Colors.green : Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
+                    ),
+                  );
+                }).toList(),
+              ),
+              PolylineLayer(polylines: _flightPaths),
+              MarkerLayer(markers: _aircraftMarkers),
+            ],
           ),
-          PolylineLayer(polylines: _flightPaths),
-          MarkerLayer(markers: _aircraftMarkers),
           Positioned(
             right: 16,
             top: 16,
@@ -1301,13 +1320,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
+                // Pierwszy rząd - może się zawinąć do 2 rzędów na wąskich ekranach
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Wybrane lotnisko: ${_selectedIcao.isEmpty ? "Brak" : _selectedIcao}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                    Text(
+                      'Wybrane lotnisko: ${_selectedIcao.isEmpty ? "Brak" : _selectedIcao}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     TextButton.icon(
                       onPressed: _isPlaying
@@ -1316,24 +1337,39 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                               ? () => _playLiveStreamForAirport(_selectedIcao)
                               : null),
                       icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
-                      label: Text(_isPlaying ? 'Zatrzymaj' : 'Odtwórz'),
+                      label: Text(_isPlaying ? 'Stop' : 'Odtwórz'),
                     ),
+                    if ((_isPlaying || _listeningIcao != null) && _listeningIcao != null && _listeningIcao!.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.swap_horiz),
+                        tooltip: 'Zmień stream',
+                        onPressed: _changeStream,
+                        iconSize: 24,
+                        color: Colors.blue,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                // Drugi rząd - może się zawinąć do 2 rzędów na wąskich ekranach
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Icon(
                       Icons.radio,
                       color: _isPlaying ? Colors.green : Colors.grey,
                       size: 18,
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
+                    Container(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width - 100,
+                      ),
                       child: Text(
                         (_isPlaying || _listeningIcao != null)
-                            ? 'Nasłuchujesz: ${_listeningIcao ?? _selectedIcao}${_currentStreamName != null && _currentStreamName!.isNotEmpty ? ' - $_currentStreamName' : ''}'
+                            ? '${_listeningIcao ?? _selectedIcao}${_currentStreamName != null && _currentStreamName!.isNotEmpty ? ' - $_currentStreamName' : ''}'
                             : 'Brak aktywnego nasłuchu',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
@@ -1342,17 +1378,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if ((_isPlaying || _listeningIcao != null) && _listeningIcao != null && _listeningIcao!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: IconButton(
-                          icon: const Icon(Icons.swap_horiz),
-                          tooltip: 'Zmień stream',
-                          onPressed: _changeStream,
-                          iconSize: 24,
-                          color: Colors.blue,
-                        ),
-                      ),
                   ],
                 ),
               ],

@@ -94,7 +94,6 @@ class _MyPhotosScreenState extends State<MyPhotosScreen> {
           }
 
           final photos = snapshot.data ?? [];
-          debugPrint('Załadowano ${photos.length} moich zdjęć');
 
           if (photos.isEmpty) {
             return Center(
