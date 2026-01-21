@@ -1,6 +1,27 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:latlong2/latlong.dart';
 import '../services/firebase_service.dart';
 import 'airport.dart';
+
+// #region agent log
+void _debugLog(String location, String message, Map<String, dynamic> data, String hypothesisId, {String runId = 'run1'}) {
+  try {
+    final logEntry = {
+      'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'location': location,
+      'message': message,
+      'data': data,
+      'sessionId': 'debug-session',
+      'runId': runId,
+      'hypothesisId': hypothesisId,
+    };
+    final logFile = File(r'c:\Users\jarek\flutter_application\flutter_application\.cursor\debug.log');
+    logFile.writeAsStringSync('${jsonEncode(logEntry)}\n', mode: FileMode.append);
+  } catch (_) {}
+}
+// #endregion
 
 /// Domyślna lista lotnisk (fallback)
 const List<Airport> defaultAirports = [
@@ -89,9 +110,13 @@ List<Airport> airports = defaultAirports;
 
 /// Ładuje lotniska z Firebase lub używa domyślnej listy
 Future<List<Airport>> loadAirports() async {
+  _debugLog('airports_data.dart:loadAirports', 'loadAirports started', {}, 'H4');
   try {
+    _debugLog('airports_data.dart:loadAirports', 'Creating FirebaseService', {}, 'H4');
     final firebaseService = FirebaseService();
+    _debugLog('airports_data.dart:loadAirports', 'Calling getAirports', {}, 'H4');
     final firebaseAirports = await firebaseService.getAirports();
+    _debugLog('airports_data.dart:loadAirports', 'getAirports returned', {'count': firebaseAirports.length}, 'H4');
     
     if (firebaseAirports.isNotEmpty) {
       // Połącz lotniska z Firebase z domyślnymi (bez duplikatów)
@@ -99,12 +124,15 @@ Future<List<Airport>> loadAirports() async {
       final additionalDefaults = defaultAirports.where((a) => !icaoCodes.contains(a.icao)).toList();
       
       airports = [...firebaseAirports, ...additionalDefaults];
+      _debugLog('airports_data.dart:loadAirports', 'Merged airports', {'total': airports.length}, 'H4');
       return airports;
     } else {
       airports = defaultAirports;
+      _debugLog('airports_data.dart:loadAirports', 'Using default airports', {'count': airports.length}, 'H4');
       return airports;
     }
-  } catch (e) {
+  } catch (e, stackTrace) {
+    _debugLog('airports_data.dart:loadAirports', 'loadAirports exception', {'error': e.toString(), 'stack': stackTrace.toString()}, 'H4');
     // W przypadku błędu użyj domyślnej listy
     airports = defaultAirports;
     return airports;

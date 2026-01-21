@@ -27,7 +27,8 @@ class Aircraft {
     this.aircraftType,
   });
 
-  /// Kategoryzuje typ statku powietrznego na podstawie kodu ICAO lub heurystyki
+  /// Kategoryzuje typ statku powietrznego na podstawie kodu ICAO
+  /// Zwraca unknown jeśli brak typu statku (API nie pozwala na przewidywanie)
   AircraftCategory get category {
     // Jeśli mamy kod typu statku, użyj go
     if (aircraftType != null && aircraftType!.isNotEmpty) {
@@ -61,58 +62,8 @@ class Aircraft {
       return AircraftCategory.medium;
     }
     
-    // Heurystyka na podstawie callsign i innych danych (gdy nie mamy typu statku)
-    return _detectCategoryFromHeuristics();
-  }
-
-  /// Wykrywa kategorię statku na podstawie heurystyki (callsign, prędkość, wysokość)
-  AircraftCategory _detectCategoryFromHeuristics() {
-    final callsignUpper = callsign.toUpperCase();
-    
-    // Wykrywanie helikopterów na podstawie callsign
-    // Helikoptery często mają prefiksy: HELI, RESCUE, POLICE, MED, SAR, HEMS, etc.
-    if (callsignUpper.contains('HELI') ||
-        callsignUpper.contains('RESCUE') ||
-        callsignUpper.contains('POLICE') ||
-        callsignUpper.contains('MED') ||
-        callsignUpper.contains('SAR') ||
-        callsignUpper.contains('HEMS') ||
-        callsignUpper.contains('AIR') && callsignUpper.contains('AMB') ||
-        callsignUpper.startsWith('H') && callsignUpper.length <= 4) {
-      return AircraftCategory.helicopter;
-    }
-    
-    // Wykrywanie helikopterów na podstawie prędkości i wysokości
-    // Helikoptery zwykle latają wolniej (< 200 km/h) i na niższych wysokościach
-    if (velocity > 0 && velocity < 55 && altitude < 3000) {
-      // Może być helikopter, ale nie jesteśmy pewni - zostaw jako unknown
-    }
-    
-    // Wykrywanie małych samolotów na podstawie callsign
-    // Małe samoloty często mają krótkie callsigny lub zaczynają się od liter C, N (USA)
-    if (callsignUpper.length <= 4 && 
-        (callsignUpper.startsWith('C') || 
-         callsignUpper.startsWith('N') ||
-         callsignUpper.startsWith('G'))) {
-      // Może być mały samolot, ale nie jesteśmy pewni
-    }
-    
-    // Wykrywanie dużych samolotów na podstawie callsign
-    // Duże samoloty komercyjne mają callsigny linii lotniczych (3-4 litery + numery)
-    // np. LOT, LH, BA, FR, etc.
-    if (callsignUpper.length >= 5 && 
-        callsignUpper.length <= 7 &&
-        RegExp(r'^[A-Z]{2,3}\d{1,4}$').hasMatch(callsignUpper)) {
-      // Może być średni/duży samolot komercyjny
-      // Sprawdź prędkość - duże samoloty latają szybciej
-      if (velocity > 200) {
-        return AircraftCategory.large;
-      }
-      return AircraftCategory.medium;
-    }
-    
-    // Domyślnie traktuj jako średni samolot (najczęstszy przypadek)
-    return AircraftCategory.medium;
+    // Brak typu statku - zwróć unknown (API nie pozwala na przewidywanie)
+    return AircraftCategory.unknown;
   }
 
 

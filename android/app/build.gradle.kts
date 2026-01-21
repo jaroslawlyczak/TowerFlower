@@ -2,10 +2,11 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.example.flutter_application"
+    namespace = "com.TowerFlower.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
@@ -19,8 +20,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.flutter_application"
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.TowerFlower.app"  // Musi pasować do google-services.json
+        minSdk = 23  // Firebase Auth requires minimum SDK 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

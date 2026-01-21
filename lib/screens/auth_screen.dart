@@ -95,14 +95,23 @@ class _AuthScreenState extends State<AuthScreen> {
         title: Text(_isLogin ? 'Logowanie' : 'Rejestracja'),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height - 
+                           MediaQuery.of(context).padding.top - 
+                           MediaQuery.of(context).padding.bottom - 
+                           kToolbarHeight - 32,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // Logo or app title
               const Icon(
                 Icons.flight,
@@ -229,7 +238,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   style: TextStyle(fontSize: 14),
                 ),
               ),
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

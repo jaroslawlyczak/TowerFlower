@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -10,6 +11,25 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/airport.dart';
 import '../models/aircraft_photo.dart';
+
+// #region agent log
+void _debugLog(String location, String message, Map<String, dynamic> data, String hypothesisId, {String runId = 'run1'}) {
+  try {
+    final logEntry = {
+      'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'location': location,
+      'message': message,
+      'data': data,
+      'sessionId': 'debug-session',
+      'runId': runId,
+      'hypothesisId': hypothesisId,
+    };
+    final logFile = File(r'c:\Users\jarek\flutter_application\flutter_application\.cursor\debug.log');
+    logFile.writeAsStringSync('${jsonEncode(logEntry)}\n', mode: FileMode.append);
+  } catch (_) {}
+}
+// #endregion
 
 class FirebaseService {
   static final FirebaseService _instance = FirebaseService._internal();
@@ -425,10 +445,13 @@ class FirebaseService {
   }
 
   Future<List<Airport>> getAirports() async {
+    _debugLog('firebase_service.dart:getAirports', 'getAirports started', {}, 'H4');
     try {
+      _debugLog('firebase_service.dart:getAirports', 'Querying Firestore airports collection', {}, 'H4');
       final snapshot = await _firestore.collection('airports').get();
+      _debugLog('firebase_service.dart:getAirports', 'Firestore query completed', {'docsCount': snapshot.docs.length}, 'H4');
       
-      return snapshot.docs.map((doc) {
+      final airports = snapshot.docs.map((doc) {
         final data = doc.data();
         final location = data['location'] as GeoPoint;
         
@@ -439,11 +462,19 @@ class FirebaseService {
           liveStreamUrl: data['liveStreamUrl'],
         );
       }).toList();
-    } catch (e) {
-      await _analytics.logEvent(
-        name: 'firestore_error',
-        parameters: {'error': e.toString()},
-      );
+      _debugLog('firebase_service.dart:getAirports', 'Airports parsed successfully', {'count': airports.length}, 'H4');
+      return airports;
+    } catch (e, stackTrace) {
+      _debugLog('firebase_service.dart:getAirports', 'getAirports exception', {'error': e.toString(), 'stack': stackTrace.toString()}, 'H4');
+      // Bezpieczne logowanie błędów - nie crashuj aplikacji jeśli Analytics nie działa
+      try {
+        await _analytics.logEvent(
+          name: 'firestore_error',
+          parameters: {'error': e.toString()},
+        );
+      } catch (_) {
+        // Ignoruj błędy Analytics
+      }
       return [];
     }
   }
